@@ -30,6 +30,7 @@ default_configs = {'textcleaner':{'stop_words':True,
 
 
 
+
 class TextCleaner:
 
     def __init__(self):
