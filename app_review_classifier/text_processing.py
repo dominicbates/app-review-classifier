@@ -30,20 +30,28 @@ default_configs = {'textcleaner':{'stop_words':True,
 
 
 
-
 class TextCleaner:
-
-    def __init__(self):
+    def __init__(self, 
+                 config=None):
         
         self.bigram_model = None
         self.trigram_model = None
         
+        # Set config params
+        if config is None:
+            self.config = default_configs['textcleaner']
+        else:
+            self.config = config
+        self.use_stop_words = self.config['stop_words']
+        self.use_ngrams = self.config['ngrams']
+        self.use_lemmatization = self.config['lemmatization']
+        self.stop_words = my_stop_words
         
-    def remove_stopwords_row(self, doc, min_n=3):
+    def remove_stopwords_row(self, text, min_n=3):
         '''
         Removes stop words from single row (e.g. 'here is some text')
         '''
-        txt = [token for token in doc if token not in my_stop_words]
+        txt = [token for token in text if token not in self.stop_words]
         # return None if not enough words left
         if len(txt) >= min_n:
             return ' '.join(txt)
@@ -56,44 +64,52 @@ class TextCleaner:
         '''
         Cleans whole text column and removes stop words e.g. df['cleaned_text'] = remove_stopwords(df['raw_text'])
         '''
-        print('Cleaning up text...')
+        print('Cleaning up text and removing stopwords...')
         t1 = time.time()
         cleaned_text = [re.sub("[^a-zA-Z ]", '', str(row)).lower() for row in text_df] # Doesn't do anything for this dataset (remove non alpha-numeric?)
         cleaned_text = [re.sub(' +', ' ', str(row)).lower().lstrip(' ') for row in cleaned_text] # Remove multiple spaces
         cleaned_text = [self.remove_stopwords_row(doc.split(' ')) for doc in cleaned_text] # Remove stop words
-        print('Text cleaned in: {} seconds'.format(round((time.time() - t1), 2)))
+        print('- Text cleaned in: {} seconds'.format(round((time.time() - t1), 2)))
 
         return cleaned_text
 
     
-    def lemmatization(self, texts, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV']):
+    def lemmatization(self, documents, allowed_postags=['NOUN', 'ADJ', 'VERB', 'ADV']):
 
         # Load model
-        print('Loading spacy model...')
+        print('\nLoading spacy model...')
+        t1 = time.time()
         nlp = spacy.load('en_core_web_sm', disable=['parser', 'ner'])
-        print('Model loaded!')
+        print('- Model loaded in: {} seconds'.format(round((time.time() - t1), 2)))
         
-        texts_out = []
-        for sent in texts:
-            doc = nlp(" ".join(sent)) 
-            texts_out.append([token.lemma_ for token in doc if token.pos_ in allowed_postags])
+        # Lemmatize text
+        print('\nLemmatizing...')
+        t1 = time.time()
+
+        documents_out = []
+        for document in documents:
+            doc = nlp(" ".join(document)) 
+            documents_out.append([token.lemma_ for token in doc if token.pos_ in allowed_postags])
         
-        return texts_out
+        print('- Lemmatizing done in: {} seconds'.format(round((time.time() - t1), 2)))
+        return documents_out
         
         
-    def train_ngrams(self, words, ngram_threshold):
+    def train_ngrams(self, documents, ngram_threshold):
         # Build the bigram and trigram models
-        bigram = Phrases(words, min_count=1, threshold=ngram_threshold) # higher threshold fewer phrases.
-        trigram = Phrases(bigram[words], min_count=1, threshold=ngram_threshold)  
+        print('\nTraining ngrams...')
+        t1 = time.time()
+
+        bigram = Phrases(documents, min_count=1, threshold=ngram_threshold) # higher threshold fewer phrases.
+        trigram = Phrases(bigram[documents], min_count=1, threshold=ngram_threshold)  
         self.bigram_model = Phraser(bigram)
         self.trigram_model = Phraser(trigram)
 
-        
+        print('- Training done in: {} seconds'.format(round((time.time() - t1), 2)))
+
+
     def process_raw_text(self, raw_text, 
-                               apply_stop_words = True,
-                               apply_ngrams = True,
-                               apply_lemmatization = True,
-                               train_ngrams = True, 
+                               train_ngrams = False, 
                                ngram_threshold=200):
 
         def sentence_to_words(sentences):
@@ -101,8 +117,8 @@ class TextCleaner:
                 yield(simple_preprocess(str(sentence), deacc=True, min_len=1, max_len=20))  # deacc=True removes punctuations
 
         # Remove stop words (if required)
-        if apply_stop_words == True:
-            cleaned_text = test_embedder.remove_stopwords(df_train['review'])
+        if self.use_stop_words == True:
+            cleaned_text = self.remove_stopwords(raw_text)
         else:
             cleaned_text = raw_text
 
@@ -114,19 +130,21 @@ class TextCleaner:
             self.train_ngrams(words, ngram_threshold)
             
         # Apply ngrams (if required)
-        if apply_ngrams == True:
-            words = [self.trigram_model[self.bigram_model[doc]] for doc in words]
+        if self.use_ngrams == True:
+            if self.bigram_model is None:
+                raise ValueError('Bigram/Trigram models not trained yet! Set train_ngrams=True when calling process_raw_text() to train and save the ngram models')
+            else:
+                words = [self.trigram_model[self.bigram_model[doc]] for doc in words]
         
         # Lemmatise (if required)
-        if apply_lemmatization == True:
+        if self.use_lemmatization == True:
             final_words = self.lemmatization(words)
         else:
             final_words = words
 
         return final_words
-
-
-
+        
+        
 
 class Embedder:
     '''
@@ -159,44 +177,46 @@ class Embedder:
             print('not done yet')
         
         
-    def fit(self, sentences):
+    def fit(self, documents):
         
         if self.method is 'tfidf':
-            self.embedder.fit([' '.join(sentence) for sentence in sentences]) # Requires single string with spaces
+            self.embedder.fit([' '.join(document) for document in documents]) # Requires single string with spaces
             
         elif self.method is 'word2vec':
-            print('Word2Vec: Setting up model...')
+            print('Fitting word2vec model...')
+            print('- Setting up model...')
             self.embedder = Word2Vec(min_count=self.config['min_count'],
                                      vector_size = self.config['vector_size'],
                                      workers = self.config['workers'],
                                      window = self.config['window'],
                                      sg = self.config['sg'])
-            print('Done!\nWord2Vec: Building Vocab...')
-            self.embedder.build_vocab(sentences, progress_per=1000)
-            print('Done!\nWord2Vec: Training Model...')
-            self.embedder.train(sentences, total_examples=self.embedder.corpus_count, epochs=50, report_delay=1)
-            print('Done!')
+            print('- Done!\n- Building Vocab...')
+            self.embedder.build_vocab(documents, progress_per=1000)
+            print('- Built!\n- Training Model...')
+            self.embedder.train(documents, total_examples=self.embedder.corpus_count, epochs=50, report_delay=1)
+            print('- Trained!')
             
             
-    def apply(self, sentences):
+
+    def apply(self, documents):
         
         if self.method is 'tfidf':
-            return self.embedder.transform([' '.join(sentence) for sentence in sentences]) # Requires single string with spaces
+            return self.embedder.transform([' '.join(document) for document in documents]) # Requires single string with spaces
         
         elif self.method is 'word2vec':
             
             words = set(test_embedder.embedder.wv.index_to_key)
 
             # Get vectors of each word
-            word_vectors = np.array([np.array([test_embedder.embedder.wv[i] for i in ls if i in words])
-                                     for ls in input_sentences], dtype=object)
+            word_vectors = np.array([np.array([self.embedder.wv[i] for i in ls if i in words])
+                                     for ls in documents], dtype=object)
             # Average this for all sentences
-            sentence_vectors = []
+            document_vectors = []
             for v in word_vectors:
                 if v.size > 1:
-                    sentence_vectors.append(v.mean(axis=0))
+                    document_vectors.append(v.mean(axis=0))
                 else:
-                    sentence_vectors.append(np.zeros(self.config['vector_size'], dtype=float))
+                    document_vectors.append(np.zeros(self.config['vector_size'], dtype=float))
 
 
-            return np.array(sentence_vectors)
+            return np.array(document_vectors)

@@ -7,7 +7,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import LinearSVC
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
-
+import gensim.corpora as corpora
 
 
 class Classifier:
