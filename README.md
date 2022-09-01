@@ -21,7 +21,7 @@ For this reason you should instead keep a "production" file of reviews, and "upd
 
 ### Manual classification
 
-A set of reviews have been manually classified, stored in this google sheet: (NOT YET CREATED). This is the dataset from which the classification models are trained. Reviews were extracted as above, which were filtered to (DATE RANGE), and randomised for manual classificaiton.
+A set of reviews have been manually classified, stored in this google sheet: (NOT YET CREATED). This is the dataset from which the classification models are trained. Reviews were extracted as above, which were filtered to (DATE RANGE), and randomised for manual classificaiton. Categories were chosen to best represent the data as a limited set of topics, but was also informed by topic modelling work. The final output is 5 subject classifications, and 3 sentiment classifications.
 
 The production models we chosen to be (NOT YET DONE).
 
