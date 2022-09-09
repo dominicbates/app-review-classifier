@@ -180,8 +180,10 @@ class Embedder:
     def fit(self, documents):
         
         if self.method is 'tfidf':
+            print('Fitting tfidf model...')
             self.embedder.fit([' '.join(document) for document in documents]) # Requires single string with spaces
-            
+            print('- Done!')
+
         elif self.method is 'word2vec':
             print('Fitting word2vec model...')
             print('- Setting up model...')
@@ -205,7 +207,7 @@ class Embedder:
         
         elif self.method is 'word2vec':
             
-            words = set(test_embedder.embedder.wv.index_to_key)
+            words = set(self.embedder.wv.index_to_key)
 
             # Get vectors of each word
             word_vectors = np.array([np.array([self.embedder.wv[i] for i in ls if i in words])

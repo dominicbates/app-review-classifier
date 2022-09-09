@@ -68,10 +68,19 @@ def apple_reviews_to_df(reviews_dict, app_name):
 
 
 def get_google_reviews(app_id, country, lang):
-    reviews_dict = reviews_all(app_id,
-                               sleep_milliseconds=0, # defaults to 0
-                               country=country, # Changing this doesn't do anything - 3078 reviews show up regardless of what country code - this is probably all EN reviews, after checking how many per country with "app()"
-                               lang=lang) # Just choosing EN filters out some english reviews, e.g. FR is mostly english)
+
+    # Try multiple times if request fails
+    for n in range(10):
+        try:
+            reviews_dict = reviews_all(app_id,
+                                       sleep_milliseconds=0, # defaults to 0
+                                       country=country, # Changing this doesn't do anything - 3078 reviews show up regardless of what country code - this is probably all EN reviews, after checking how many per country with "app()"
+                                       lang=lang) # Just choosing EN filters out some english reviews, e.g. FR is mostly english)
+            break
+        except:
+            time.sleep(10+(n*2)) 
+
+
     return reviews_dict
 
 
@@ -116,10 +125,23 @@ def get_all_reviews(country_list = None, max_retries = 10):
     # Scrape apple reviews
     apple_reviews_economist = {}
     apple_reviews_espresso = {}
+    count = 0
+
     print('Getting apple reviews...')
     for country in countries_list: 
+
         apple_reviews_economist[country] = get_apple_reviews('the-economist', app_id='1239397626', country=country, max_retries=max_retries)
+        if count <= 2: # Sleep between calls for the big ones
+            time.sleep(30) 
+        else:
+            time.sleep(10) 
+
         apple_reviews_espresso[country] = get_apple_reviews('espresso-from-the-economist', app_id='896628003', country=country, max_retries=max_retries)
+        if count <= 2: # Sleep between calls for the big ones
+            time.sleep(30) 
+        else:
+            time.sleep(10) 
+        count+=1
     print('Apple reviews downloaded!')
 
     # Scrape google reviews
@@ -157,17 +179,20 @@ def update_reviews_df(old_reviews_df, new_reviews_df=None):
     it will still be kept
     '''
     if new_reviews_df is None:
-        print('Getting new reviews...')
+        print('Getting new reviews to update dataframe...')
         new_reviews_df = get_all_reviews(country_list = None)
+        new_reviews_df['row_created_date'] = pd.Timestamp.now()
+    else:
+        print('Updating reviews using supplied dataframe (check that "row_created_date" column is defined)...')
     
     # Combine dataframes
     print('Combining with old reviews dataframe...')
     combined_df = pd.concat([old_reviews_df, new_reviews_df]).reset_index(drop=True)
 
-    # Remove any duplictaed rows (i.e. share the same uniqueid)
-    combined_df = combined_df.sort_values(['uniqueid', 'date'],
-                                       ascending = [True, False]).reset_index(drop=True)
-    combined_df = combined_df.groupby('uniqueid',as_index=False).first().reset_index(drop=True)
+    # Remove any duplictaed rows (i.e. share the same text and datetime) - can't use username since doesn't exist for some people
+    combined_df = combined_df.sort_values(['review', 'date', 'row_created_date'],
+                                       ascending = [True, False, True]).reset_index(drop=True)
+    combined_df = combined_df.groupby(['review','date'],as_index=False).first().reset_index(drop=True)
     
     
     print('\nOriginal reviews dataframe length:',len(old_reviews_df))
