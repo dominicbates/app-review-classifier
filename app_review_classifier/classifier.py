@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.naive_bayes import MultinomialNB
@@ -104,7 +105,12 @@ class Classifier:
         else:
             return confusion_matrix_df, accuracy_score_val
         
-        
+    def save_model(self, fpath):
+        print('Saving model to:',fpath)
+        with open(fpath, 'wb') as handle:
+            pickle.dump(self, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        print('Model saved!')
+
     # def print_top_words(self, vectorizer, n = 100):
 
     #     for c in range(0,len(self.model.classes_)):
@@ -117,6 +123,12 @@ class Classifier:
     #         print(''.join(words)[:-2])
     #         print('')
 
+def load_model(fpath):
+    print('Loading model from:',fpath)
+    with open(fpath, 'rb') as handle:
+        model = pickle.load(handle)
+        print('Model loaded!')
+    return model
 
 
 
@@ -174,7 +186,6 @@ class TopicModel:
 
     def apply(self, documents):
         corpus = self.get_corpus(documents, train_dict=False)
-
 
 
 
